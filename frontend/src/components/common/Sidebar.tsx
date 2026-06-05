@@ -9,7 +9,7 @@ import clsx from 'clsx';
 
 const navItems = [
   { path: '/dashboard',       label: 'Dashboard',       icon: LayoutDashboard },
-  { path: '/cv-analyzer',     label: 'CV Analyzer',     icon: FileText },
+  { path: '/cv-analyzer',     label: 'CV Tools',        icon: FileText },
   { path: '/resume-builder',  label: 'Resume Builder',  icon: Edit3 },
   { path: '/cover-letter',    label: 'Cover Letter',    icon: Mail },
   { path: '/interview',       label: 'Interview Prep',  icon: MessageSquare },

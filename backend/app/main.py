@@ -12,7 +12,7 @@ from slowapi.errors import RateLimitExceeded
 from app.config import settings
 from app.database import create_tables
 from app.utils.logger import app_logger
-from app.routers import auth, users, cv_analyzer, resume_builder, cover_letter, interview_chat, salary_predictor
+from app.routers import auth, users, cv_analyzer, resume_builder, cover_letter, interview_chat, salary_predictor, cv_generator
 
 # Create required directories
 os.makedirs("uploads", exist_ok=True)
@@ -112,6 +112,7 @@ app.include_router(resume_builder.router, prefix=API_PREFIX)
 app.include_router(cover_letter.router, prefix=API_PREFIX)
 app.include_router(interview_chat.router, prefix=API_PREFIX)
 app.include_router(salary_predictor.router, prefix=API_PREFIX)
+app.include_router(cv_generator.router, prefix=API_PREFIX)
 
 
 @app.get("/", tags=["Root"])

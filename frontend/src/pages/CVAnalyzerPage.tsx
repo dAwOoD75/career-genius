@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
-import { Upload, CheckCircle, XCircle, AlertCircle, Lightbulb, Target, Zap, Mail, ArrowRight, FileText, PenLine } from 'lucide-react';
+import { Upload, CheckCircle, XCircle, AlertCircle, Lightbulb, Target, Zap, Mail, ArrowRight, FileText, PenLine, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cvService } from '@/services/cvService';
 import { ATSReport } from '@/types';
@@ -9,8 +9,9 @@ import ScoreGauge from '@/components/common/ScoreGauge';
 import toast from 'react-hot-toast';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import CVBuilderForm from '@/components/CVBuilderForm';
+import CVGeneratorPage from '@/pages/CVGeneratorPage';
 
-type PageTab = 'analyze' | 'build';
+type PageTab = 'analyze' | 'build' | 'generate';
 
 export default function CVAnalyzerPage() {
   const [pageTab, setPageTab] = useState<PageTab>('analyze');
@@ -84,6 +85,16 @@ export default function CVAnalyzerPage() {
         >
           <PenLine size={15} /> Build CV
         </button>
+        <button
+          onClick={() => setPageTab('generate')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+            pageTab === 'generate'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-gray-500 hover:text-gray-800'
+          }`}
+        >
+          <Sparkles size={15} /> ATS Generator
+        </button>
       </div>
 
       {/* Build CV tab */}
@@ -93,6 +104,16 @@ export default function CVAnalyzerPage() {
             Fill in your information below and download a professional CV PDF in the standard format.
           </div>
           <CVBuilderForm />
+        </motion.div>
+      )}
+
+      {/* ATS Generator tab */}
+      {pageTab === 'generate' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="mb-4 bg-violet-50 border border-violet-100 rounded-xl px-4 py-3 text-violet-700 text-sm">
+            Fill in your details step-by-step and get an AI-optimized CV PDF with an ATS score.
+          </div>
+          <CVGeneratorPage embedded />
         </motion.div>
       )}
 
