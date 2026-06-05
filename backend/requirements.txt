@@ -40,7 +40,7 @@ slowapi==0.1.9
 
 # PDF Generation
 reportlab==4.2.0
-weasyprint==62.1
+fpdf2==2.7.9
 
 # Testing
 pytest==8.2.0

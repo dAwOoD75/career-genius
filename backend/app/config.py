@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings
 from pydantic import field_validator
 from typing import List
 import os
+import json
 
 
 class Settings(BaseSettings):
@@ -42,7 +43,10 @@ class Settings(BaseSettings):
     @classmethod
     def parse_origins(cls, v):
         if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
+            v = v.strip()
+            if v.startswith("["):
+                return json.loads(v)
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
 
     @property

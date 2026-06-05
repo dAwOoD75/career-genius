@@ -1,0 +1,27 @@
+# Python
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/.env
+backend/career_genius.db
+backend/career_genius.db-shm
+backend/career_genius.db-wal
+backend/uploads/
+backend/logs/
+backend/tests/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+frontend/.env.production
+
+# Git
+.git/
+.gitignore
+
+# Misc
+*.md
+.DS_Store
+Thumbs.db
