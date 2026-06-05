@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import {
   FileText, MessageSquare, TrendingUp, Upload, Mail,
   Brain, BarChart3, Target, Clock, UserCheck, ChevronRight,
-  Search, Star, Activity, Users, Briefcase,
+  Search, Star, Activity, Users, Briefcase, Sparkles, User, Wrench, GraduationCap,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -204,9 +204,12 @@ function DashboardMockup() {
   );
 }
 
+type CVSubTab = 'analyze' | 'generate';
+
 export default function LandingPage() {
   const { isAuthenticated, isLoading } = useAuth();
   const [activeModule, setActiveModule] = useState<Module>('CV Analysis');
+  const [cvSubTab, setCvSubTab] = useState<CVSubTab>('analyze');
 
   const scrollTo = (id: string) =>
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
@@ -437,29 +440,99 @@ export default function LandingPage() {
 
             {activeModule === 'CV Analysis' && (
               <div>
-                <div className="flex items-center gap-4 mb-8">
+                {/* Header */}
+                <div className="flex items-center gap-4 mb-6">
                   <div className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
                     style={{ backgroundColor: '#EEF2FF' }}>
-                    <Upload size={24} style={{ color: '#4F46E5' }} />
+                    <FileText size={24} style={{ color: '#4F46E5' }} />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-gray-900">CV Analysis</h3>
-                    <p className="text-gray-400 text-[14px] mt-0.5">Upload your CV for AI-powered analysis</p>
+                    <h3 className="text-xl font-bold text-gray-900">CV Tools</h3>
+                    <p className="text-gray-400 text-[14px] mt-0.5">Analyze your CV or generate a new ATS-optimized one</p>
                   </div>
                 </div>
-                <div className="border-2 border-dashed rounded-2xl py-16 text-center mb-8"
-                  style={{ borderColor: '#D1D5DB' }}>
-                  <Upload size={44} className="mx-auto mb-4" style={{ color: '#9CA3AF' }} />
-                  <p className="text-gray-600 font-medium text-[15px]">Click to upload or drag and drop</p>
-                  <p className="text-gray-400 text-[13px] mt-1.5">PDF, DOC, DOCX (Max 5MB)</p>
+
+                {/* Sub-tabs */}
+                <div className="flex gap-2 mb-6 bg-gray-50 rounded-xl p-1">
+                  <button
+                    onClick={() => setCvSubTab('analyze')}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[14px] font-semibold transition-all"
+                    style={cvSubTab === 'analyze'
+                      ? { background: '#fff', color: '#4F46E5', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }
+                      : { color: '#6B7280', background: 'transparent' }}
+                  >
+                    <Upload size={15} /> Analyze CV
+                  </button>
+                  <button
+                    onClick={() => setCvSubTab('generate')}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[14px] font-semibold transition-all"
+                    style={cvSubTab === 'generate'
+                      ? { background: '#fff', color: '#7C3AED', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }
+                      : { color: '#6B7280', background: 'transparent' }}
+                  >
+                    <Sparkles size={15} /> Generate CV
+                  </button>
                 </div>
-                <Link to="/login?tab=register"
-                  className="block w-full text-white text-center font-semibold py-4 rounded-xl text-[15px] transition-colors"
-                  style={{ background: '#2563EB' }}
-                  onMouseOver={e => (e.currentTarget.style.background = '#1D4ED8')}
-                  onMouseOut={e => (e.currentTarget.style.background = '#2563EB')}>
-                  Analyze CV
-                </Link>
+
+                {/* Analyze sub-tab */}
+                {cvSubTab === 'analyze' && (
+                  <div>
+                    <div className="border-2 border-dashed rounded-2xl py-14 text-center mb-6"
+                      style={{ borderColor: '#D1D5DB' }}>
+                      <Upload size={44} className="mx-auto mb-4" style={{ color: '#9CA3AF' }} />
+                      <p className="text-gray-600 font-medium text-[15px]">Click to upload or drag and drop</p>
+                      <p className="text-gray-400 text-[13px] mt-1.5">PDF, DOC, DOCX (Max 5MB)</p>
+                    </div>
+                    <Link to="/login?tab=register"
+                      className="block w-full text-white text-center font-semibold py-4 rounded-xl text-[15px] transition-colors"
+                      style={{ background: '#2563EB' }}
+                      onMouseOver={e => (e.currentTarget.style.background = '#1D4ED8')}
+                      onMouseOut={e => (e.currentTarget.style.background = '#2563EB')}>
+                      Analyze CV
+                    </Link>
+                  </div>
+                )}
+
+                {/* Generate sub-tab */}
+                {cvSubTab === 'generate' && (
+                  <div>
+                    <div className="rounded-2xl border border-gray-100 p-5 mb-6" style={{ background: '#FAFAFF' }}>
+                      <p className="text-[13px] font-semibold text-gray-500 uppercase tracking-wide mb-4">Steps to build your ATS CV</p>
+                      <div className="space-y-3">
+                        {[
+                          { icon: User,          label: 'Personal Info',     desc: 'Name, email, phone, LinkedIn' },
+                          { icon: FileText,      label: 'Summary',           desc: 'Professional summary with action verbs' },
+                          { icon: Wrench,        label: 'Skills',            desc: 'Technical & soft skills' },
+                          { icon: Briefcase,     label: 'Work Experience',   desc: 'Roles, companies & achievements' },
+                          { icon: GraduationCap, label: 'Education',         desc: 'Degree, institution & year' },
+                        ].map(({ icon: Icon, label, desc }, i) => (
+                          <div key={i} className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                              style={{ background: '#EEF2FF' }}>
+                              <Icon size={14} style={{ color: '#7C3AED' }} />
+                            </div>
+                            <div className="flex-1">
+                              <span className="text-[13px] font-semibold text-gray-800">{label}</span>
+                              <span className="text-[12px] text-gray-400 ml-2">{desc}</span>
+                            </div>
+                            <span className="w-5 h-5 rounded-full bg-violet-100 text-violet-600 text-[10px] font-bold flex items-center justify-center flex-shrink-0">{i + 1}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-2">
+                        <Sparkles size={14} style={{ color: '#7C3AED' }} />
+                        <p className="text-[12px] text-violet-600 font-medium">AI scores your CV and generates an ATS-optimized PDF</p>
+                      </div>
+                    </div>
+                    <Link to="/login?tab=register"
+                      className="block w-full text-white text-center font-semibold py-4 rounded-xl text-[15px] transition-colors"
+                      style={{ background: 'linear-gradient(135deg,#4F46E5,#7C3AED)' }}
+                      onMouseOver={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#4338CA,#6D28D9)')}
+                      onMouseOut={e => (e.currentTarget.style.background = 'linear-gradient(135deg,#4F46E5,#7C3AED)')}>
+                      Sign Up to Generate CV
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
 

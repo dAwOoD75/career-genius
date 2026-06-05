@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
 import {
   Upload, CheckCircle, XCircle, Lightbulb, Target,
@@ -8,6 +8,7 @@ import {
   UserCheck, Briefcase, Users,
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import CVGeneratorPage from '@/pages/CVGeneratorPage';
 import { cvService } from '@/services/cvService';
 import { interviewService } from '@/services/interviewService';
 import { salaryService } from '@/services/salaryService';
@@ -39,6 +40,7 @@ const ttStyle = {
 
 // ─── CV Analysis ─────────────────────────────────────────────────────────────
 function CVAnalysisTab() {
+  const [cvSubTab, setCvSubTab] = useState<'analyze' | 'generate'>('analyze');
   const [file, setFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [report, setReport] = useState<ATSReport | null>(null);
@@ -94,143 +96,183 @@ function CVAnalysisTab() {
     { subject: 'Completeness', score: report.completeness_score },
   ] : [];
 
-  if (report) return (
-    <AnimatePresence>
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
-        <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
-          <h4 className="font-bold text-gray-900 mb-5 text-lg">ATS Analysis Results</h4>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
-            <div className="flex flex-col items-center">
-              <ScoreGauge score={report.overall_score} size={160} label="Overall ATS Score" />
-              <div className="grid grid-cols-2 gap-3 mt-5 w-full">
-                {[['Keywords', report.keyword_score], ['Format', report.format_score], ['Readability', report.readability_score], ['Completeness', report.completeness_score]].map(([l, s]) => (
-                  <div key={l as string} className="bg-white rounded-xl p-3 text-center border border-gray-100">
-                    <p className={`text-lg font-bold ${(s as number) >= 70 ? 'text-emerald-600' : (s as number) >= 50 ? 'text-amber-500' : 'text-red-500'}`}>{Math.round(s as number)}%</p>
-                    <p className="text-gray-400 text-xs mt-0.5">{l}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart data={radarData}>
-                  <PolarGrid stroke="#e5e7eb" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#6b7280', fontSize: 12 }} />
-                  <Radar dataKey="score" stroke="#4F46E5" fill="#4F46E5" fillOpacity={0.12} />
-                  <Tooltip {...ttStyle} />
-                </RadarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-white rounded-2xl p-5 border border-gray-100">
-            <div className="flex items-center gap-2 mb-3"><CheckCircle size={16} className="text-emerald-500" /><p className="font-bold text-gray-900 text-sm">Matched Keywords ({report.matched_keywords.length})</p></div>
-            <div className="flex flex-wrap gap-2">{report.matched_keywords.length ? report.matched_keywords.map(k => <span key={k} className="badge-green">{k}</span>) : <p className="text-gray-400 text-sm">None matched</p>}</div>
-          </div>
-          <div className="bg-white rounded-2xl p-5 border border-gray-100">
-            <div className="flex items-center gap-2 mb-3"><XCircle size={16} className="text-red-500" /><p className="font-bold text-gray-900 text-sm">Missing Keywords ({report.missing_keywords.length})</p></div>
-            <div className="flex flex-wrap gap-2">{report.missing_keywords.length ? report.missing_keywords.map(k => <span key={k} className="badge-red">{k}</span>) : <p className="text-gray-400 text-sm">None missing</p>}</div>
-          </div>
-          {report.improvement_suggestions.length > 0 && (
-            <div className="bg-white rounded-2xl p-5 border border-gray-100">
-              <div className="flex items-center gap-2 mb-3"><Lightbulb size={16} className="text-blue-500" /><p className="font-bold text-gray-900 text-sm">Suggestions</p></div>
-              <ul className="space-y-1.5">{report.improvement_suggestions.map((s, i) => <li key={i} className="text-gray-600 text-sm flex gap-2"><span className="text-blue-500 flex-shrink-0">{i + 1}.</span>{s}</li>)}</ul>
-            </div>
-          )}
-          {report.extracted_skills.length > 0 && (
-            <div className="bg-white rounded-2xl p-5 border border-gray-100">
-              <div className="flex items-center gap-2 mb-3"><Target size={16} className="text-violet-500" /><p className="font-bold text-gray-900 text-sm">Skills ({report.extracted_skills.length})</p></div>
-              <div className="flex flex-wrap gap-2">{report.extracted_skills.map(s => <span key={s} className="badge-purple">{s}</span>)}</div>
-            </div>
-          )}
-        </div>
-        <div className="rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4" style={{ background: 'linear-gradient(135deg,#EEF2FF,#F5F3FF)' }}>
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm"><Mail size={22} style={{ color: '#4F46E5' }} /></div>
-            <div>
-              <p className="font-bold text-gray-900">Generate a Cover Letter</p>
-              <p className="text-gray-500 text-sm">CV scored <span className={`font-semibold ${report.overall_score >= 70 ? 'text-emerald-600' : 'text-amber-600'}`}>{report.overall_score}%</span> — create a matching cover letter now</p>
-            </div>
-          </div>
-          <Link to="/cover-letter" className="flex items-center gap-2 text-white font-semibold px-5 py-2.5 rounded-xl whitespace-nowrap text-sm" style={{ background: '#4F46E5' }}>
-            <FileText size={15} /> Generate <ArrowRight size={15} />
-          </Link>
-        </div>
-        {/* ── Suggest & Apply Changes ── */}
-        <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden">
-          <div className="flex items-center justify-between p-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: '#EEF2FF' }}>
-                <Lightbulb size={18} style={{ color: '#4F46E5' }} />
-              </div>
-              <div>
-                <p className="font-bold text-gray-900 text-sm">AI CV Improvements</p>
-                <p className="text-gray-400 text-xs mt-0.5">Get specific suggestions and apply them automatically</p>
-              </div>
-            </div>
-            {suggestions.length === 0 && (
-              <button onClick={loadSuggestions} disabled={loadingSuggestions}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-60"
-                style={{ background: '#4F46E5' }}>
-                {loadingSuggestions ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Loading...</> : <><Sparkles size={14} /> Suggest Changes</>}
-              </button>
-            )}
-          </div>
-
-          {suggestions.length > 0 && (
-            <div className="px-5 pb-5 space-y-4">
-              <ul className="space-y-2.5">
-                {suggestions.map((s, i) => (
-                  <li key={i} className="flex gap-3 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
-                    <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
-                    <p className="text-gray-700 text-sm leading-relaxed">{s}</p>
-                  </li>
-                ))}
-              </ul>
-              <button onClick={applyChanges} disabled={applyingChanges}
-                className="w-full py-3.5 rounded-xl text-white font-semibold text-[15px] flex items-center justify-center gap-2 disabled:opacity-60"
-                style={{ background: 'linear-gradient(135deg,#4F46E5,#7C3AED)' }}>
-                {applyingChanges
-                  ? <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Generating improved CV...</>
-                  : <><ArrowRight size={18} /> Apply Changes &amp; Download New CV</>}
-              </button>
-            </div>
-          )}
-        </div>
-
-        <button onClick={() => { setFile(null); setReport(null); setSuggestions([]); }} className="w-full py-3 rounded-xl border border-gray-200 text-gray-600 font-medium text-sm hover:bg-gray-50 transition-colors">
-          Analyze Another CV
-        </button>
-      </motion.div>
-    </AnimatePresence>
-  );
-
   return (
     <div>
-      <div className="flex items-center gap-4 mb-8">
-        <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: '#EEF2FF' }}>
-          <Upload size={24} style={{ color: '#4F46E5' }} />
-        </div>
+      {/* ── Sub-tab selector ── */}
+      <div className="flex gap-2 mb-6 bg-gray-50 rounded-xl p-1">
+        <button
+          onClick={() => setCvSubTab('analyze')}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[14px] font-semibold transition-all"
+          style={cvSubTab === 'analyze'
+            ? { background: '#fff', color: '#4F46E5', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }
+            : { color: '#6B7280', background: 'transparent' }}
+        >
+          <Upload size={15} /> Analyze CV
+        </button>
+        <button
+          onClick={() => setCvSubTab('generate')}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[14px] font-semibold transition-all"
+          style={cvSubTab === 'generate'
+            ? { background: '#fff', color: '#7C3AED', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }
+            : { color: '#6B7280', background: 'transparent' }}
+        >
+          <Sparkles size={15} /> ATS Generator
+        </button>
+      </div>
+
+      {/* ── ATS Generator tab ── */}
+      {cvSubTab === 'generate' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="mb-4 bg-violet-50 border border-violet-100 rounded-xl px-4 py-3 text-violet-700 text-sm">
+            Fill in your details step-by-step and get an AI-optimized CV PDF with an ATS score.
+          </div>
+          <CVGeneratorPage embedded />
+        </motion.div>
+      )}
+
+      {/* ── Analyze tab: upload form ── */}
+      {cvSubTab === 'analyze' && !report && (
         <div>
-          <h3 className="text-xl font-bold text-gray-900">CV Analysis</h3>
-          <p className="text-gray-400 text-sm mt-0.5">Upload your CV for AI-powered analysis</p>
+          <div
+            {...getRootProps()}
+            className="border-2 border-dashed rounded-2xl py-16 text-center cursor-pointer transition-all mb-6"
+            style={{ borderColor: isDragActive ? '#4F46E5' : file ? '#10B981' : '#D1D5DB', background: isDragActive ? '#EEF2FF' : file ? '#F0FDF4' : '#fff' }}
+          >
+            <input {...getInputProps()} />
+            {file ? (
+              <>
+                <CheckCircle size={44} className="mx-auto mb-4" style={{ color: '#10B981' }} />
+                <p className="font-semibold text-gray-800">{file.name}</p>
+                <p className="text-gray-400 text-sm mt-1">{(file.size / 1024).toFixed(0)} KB · Click to change</p>
+              </>
+            ) : (
+              <>
+                <Upload size={44} className="mx-auto mb-4" style={{ color: '#9CA3AF' }} />
+                <p className="text-gray-600 font-medium text-[15px]">Click to upload or drag and drop</p>
+                <p className="text-gray-400 text-[13px] mt-1.5">PDF only · Max 10MB</p>
+              </>
+            )}
+          </div>
+          <button
+            onClick={analyze}
+            disabled={!file || isAnalyzing}
+            className="w-full text-white font-semibold py-4 rounded-xl text-[15px] flex items-center justify-center gap-2 disabled:opacity-60"
+            style={{ background: '#2563EB' }}
+          >
+            {isAnalyzing
+              ? <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Analyzing...</>
+              : <><Zap size={18} /> Analyze CV</>}
+          </button>
         </div>
-      </div>
-      <div {...getRootProps()} className="border-2 border-dashed rounded-2xl py-16 text-center cursor-pointer transition-all mb-8"
-        style={{ borderColor: isDragActive ? '#4F46E5' : file ? '#10B981' : '#D1D5DB', background: isDragActive ? '#EEF2FF' : file ? '#F0FDF4' : '#fff' }}>
-        <input {...getInputProps()} />
-        {file ? (
-          <><CheckCircle size={44} className="mx-auto mb-4" style={{ color: '#10B981' }} /><p className="font-semibold text-gray-800">{file.name}</p><p className="text-gray-400 text-sm mt-1">{(file.size / 1024).toFixed(0)} KB · Click to change</p></>
-        ) : (
-          <><Upload size={44} className="mx-auto mb-4" style={{ color: '#9CA3AF' }} /><p className="text-gray-600 font-medium text-[15px]">Click to upload or drag and drop</p><p className="text-gray-400 text-[13px] mt-1.5">PDF, DOC, DOCX (Max 5MB)</p></>
-        )}
-      </div>
-      <button onClick={analyze} disabled={!file || isAnalyzing}
-        className="w-full text-white font-semibold py-4 rounded-xl text-[15px] flex items-center justify-center gap-2 disabled:opacity-60"
-        style={{ background: '#2563EB' }}>
-        {isAnalyzing ? <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Analyzing...</> : <><Zap size={18} /> Analyze CV</>}
-      </button>
+      )}
+
+      {/* ── Analyze tab: results ── */}
+      {cvSubTab === 'analyze' && report && (
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+          <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
+            <h4 className="font-bold text-gray-900 mb-5 text-lg">ATS Analysis Results</h4>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+              <div className="flex flex-col items-center">
+                <ScoreGauge score={report.overall_score} size={160} label="Overall ATS Score" />
+                <div className="grid grid-cols-2 gap-3 mt-5 w-full">
+                  {[['Keywords', report.keyword_score], ['Format', report.format_score], ['Readability', report.readability_score], ['Completeness', report.completeness_score]].map(([l, s]) => (
+                    <div key={l as string} className="bg-white rounded-xl p-3 text-center border border-gray-100">
+                      <p className={`text-lg font-bold ${(s as number) >= 70 ? 'text-emerald-600' : (s as number) >= 50 ? 'text-amber-500' : 'text-red-500'}`}>{Math.round(s as number)}%</p>
+                      <p className="text-gray-400 text-xs mt-0.5">{l}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart data={radarData}>
+                    <PolarGrid stroke="#e5e7eb" />
+                    <PolarAngleAxis dataKey="subject" tick={{ fill: '#6b7280', fontSize: 12 }} />
+                    <Radar dataKey="score" stroke="#4F46E5" fill="#4F46E5" fillOpacity={0.12} />
+                    <Tooltip {...ttStyle} />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="bg-white rounded-2xl p-5 border border-gray-100">
+              <div className="flex items-center gap-2 mb-3"><CheckCircle size={16} className="text-emerald-500" /><p className="font-bold text-gray-900 text-sm">Matched Keywords ({report.matched_keywords.length})</p></div>
+              <div className="flex flex-wrap gap-2">{report.matched_keywords.length ? report.matched_keywords.map(k => <span key={k} className="badge-green">{k}</span>) : <p className="text-gray-400 text-sm">None matched</p>}</div>
+            </div>
+            <div className="bg-white rounded-2xl p-5 border border-gray-100">
+              <div className="flex items-center gap-2 mb-3"><XCircle size={16} className="text-red-500" /><p className="font-bold text-gray-900 text-sm">Missing Keywords ({report.missing_keywords.length})</p></div>
+              <div className="flex flex-wrap gap-2">{report.missing_keywords.length ? report.missing_keywords.map(k => <span key={k} className="badge-red">{k}</span>) : <p className="text-gray-400 text-sm">None missing</p>}</div>
+            </div>
+            {report.improvement_suggestions.length > 0 && (
+              <div className="bg-white rounded-2xl p-5 border border-gray-100">
+                <div className="flex items-center gap-2 mb-3"><Lightbulb size={16} className="text-blue-500" /><p className="font-bold text-gray-900 text-sm">Suggestions</p></div>
+                <ul className="space-y-1.5">{report.improvement_suggestions.map((s, i) => <li key={i} className="text-gray-600 text-sm flex gap-2"><span className="text-blue-500 flex-shrink-0">{i + 1}.</span>{s}</li>)}</ul>
+              </div>
+            )}
+            {report.extracted_skills.length > 0 && (
+              <div className="bg-white rounded-2xl p-5 border border-gray-100">
+                <div className="flex items-center gap-2 mb-3"><Target size={16} className="text-violet-500" /><p className="font-bold text-gray-900 text-sm">Skills ({report.extracted_skills.length})</p></div>
+                <div className="flex flex-wrap gap-2">{report.extracted_skills.map(s => <span key={s} className="badge-purple">{s}</span>)}</div>
+              </div>
+            )}
+          </div>
+          <div className="rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4" style={{ background: 'linear-gradient(135deg,#EEF2FF,#F5F3FF)' }}>
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm"><Mail size={22} style={{ color: '#4F46E5' }} /></div>
+              <div>
+                <p className="font-bold text-gray-900">Generate a Cover Letter</p>
+                <p className="text-gray-500 text-sm">CV scored <span className={`font-semibold ${report.overall_score >= 70 ? 'text-emerald-600' : 'text-amber-600'}`}>{report.overall_score}%</span> — create a matching cover letter now</p>
+              </div>
+            </div>
+            <Link to="/cover-letter" className="flex items-center gap-2 text-white font-semibold px-5 py-2.5 rounded-xl whitespace-nowrap text-sm" style={{ background: '#4F46E5' }}>
+              <FileText size={15} /> Generate <ArrowRight size={15} />
+            </Link>
+          </div>
+          <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden">
+            <div className="flex items-center justify-between p-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: '#EEF2FF' }}>
+                  <Lightbulb size={18} style={{ color: '#4F46E5' }} />
+                </div>
+                <div>
+                  <p className="font-bold text-gray-900 text-sm">AI CV Improvements</p>
+                  <p className="text-gray-400 text-xs mt-0.5">Get specific suggestions and apply them automatically</p>
+                </div>
+              </div>
+              {suggestions.length === 0 && (
+                <button onClick={loadSuggestions} disabled={loadingSuggestions}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-60"
+                  style={{ background: '#4F46E5' }}>
+                  {loadingSuggestions ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Loading...</> : <><Sparkles size={14} /> Suggest Changes</>}
+                </button>
+              )}
+            </div>
+            {suggestions.length > 0 && (
+              <div className="px-5 pb-5 space-y-4">
+                <ul className="space-y-2.5">
+                  {suggestions.map((s, i) => (
+                    <li key={i} className="flex gap-3 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
+                      <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
+                      <p className="text-gray-700 text-sm leading-relaxed">{s}</p>
+                    </li>
+                  ))}
+                </ul>
+                <button onClick={applyChanges} disabled={applyingChanges}
+                  className="w-full py-3.5 rounded-xl text-white font-semibold text-[15px] flex items-center justify-center gap-2 disabled:opacity-60"
+                  style={{ background: 'linear-gradient(135deg,#4F46E5,#7C3AED)' }}>
+                  {applyingChanges
+                    ? <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Generating improved CV...</>
+                    : <><ArrowRight size={18} /> Apply Changes &amp; Download New CV</>}
+                </button>
+              </div>
+            )}
+          </div>
+          <button onClick={() => { setFile(null); setReport(null); setSuggestions([]); }} className="w-full py-3 rounded-xl border border-gray-200 text-gray-600 font-medium text-sm hover:bg-gray-50 transition-colors">
+            Analyze Another CV
+          </button>
+        </motion.div>
+      )}
     </div>
   );
 }

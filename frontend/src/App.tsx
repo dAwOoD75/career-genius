@@ -44,6 +44,7 @@ export default function App() {
               <Route path="cover-letter" element={<CoverLetterPage />} />
               <Route path="interview" element={<InterviewChatPage />} />
               <Route path="salary-predictor" element={<SalaryPredictorPage />} />
+              <Route path="cv-generator" element={<Navigate to="/cv-analyzer" replace />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
 
