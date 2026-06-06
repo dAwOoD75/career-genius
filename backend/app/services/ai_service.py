@@ -1,9 +1,9 @@
-from openai import AsyncOpenAI
+import google.generativeai as genai
 from app.config import settings
 from app.utils.logger import app_logger
 from typing import Optional, List
 
-client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+genai.configure(api_key=settings.GEMINI_API_KEY)
 
 SYSTEM_PROMPTS = {
     "cv_analyzer": """You are an expert ATS (Applicant Tracking System) analyst and career coach.
@@ -25,6 +25,17 @@ SYSTEM_PROMPTS = {
 }
 
 
+def _make_model(system_prompt: str, temperature: float, max_tokens: int):
+    return genai.GenerativeModel(
+        model_name=settings.GEMINI_MODEL,
+        system_instruction=system_prompt,
+        generation_config=genai.GenerationConfig(
+            temperature=temperature,
+            max_output_tokens=max_tokens,
+        ),
+    )
+
+
 async def call_openai(
     system_prompt: str,
     user_message: str,
@@ -33,25 +44,13 @@ async def call_openai(
     max_tokens: int = 2000,
     response_format: Optional[dict] = None,
 ) -> str:
-    """Generic OpenAI API call with error handling."""
+    """Gemini drop-in replacement for the old call_openai function."""
     try:
-        kwargs = {
-            "model": model or settings.OPENAI_MODEL,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
-        if response_format:
-            kwargs["response_format"] = response_format
-
-        response = await client.chat.completions.create(**kwargs)
-        return response.choices[0].message.content or ""
-
+        gemini_model = _make_model(system_prompt, temperature, max_tokens)
+        response = await gemini_model.generate_content_async(user_message)
+        return response.text or ""
     except Exception as e:
-        app_logger.error(f"OpenAI API error: {e}")
+        app_logger.error(f"Gemini API error: {e}")
         raise RuntimeError(f"AI service temporarily unavailable: {str(e)}")
 
 
@@ -62,16 +61,22 @@ async def call_openai_with_history(
     temperature: float = 0.8,
     max_tokens: int = 1500,
 ) -> str:
-    """OpenAI call with conversation history (for chatbot)."""
+    """Gemini drop-in replacement for call_openai_with_history."""
     try:
-        full_messages = [{"role": "system", "content": system_prompt}] + messages
-        response = await client.chat.completions.create(
-            model=model or settings.OPENAI_MODEL,
-            messages=full_messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        return response.choices[0].message.content or ""
+        gemini_model = _make_model(system_prompt, temperature, max_tokens)
+
+        # Convert OpenAI message format to Gemini format
+        # Gemini roles: "user" or "model"
+        history = []
+        for msg in messages[:-1]:
+            role = "model" if msg["role"] == "assistant" else "user"
+            history.append({"role": role, "parts": [msg["content"]]})
+
+        last_message = messages[-1]["content"] if messages else ""
+
+        chat = gemini_model.start_chat(history=history)
+        response = await chat.send_message_async(last_message)
+        return response.text or ""
     except Exception as e:
-        app_logger.error(f"OpenAI API error: {e}")
+        app_logger.error(f"Gemini API error: {e}")
         raise RuntimeError(f"AI service temporarily unavailable: {str(e)}")
