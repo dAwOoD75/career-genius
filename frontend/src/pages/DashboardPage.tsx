@@ -46,7 +46,6 @@ function CVAnalysisTab() {
   const [report, setReport] = useState<ATSReport | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-  const [applyingChanges, setApplyingChanges] = useState(false);
 
   const onDrop = useCallback((accepted: File[]) => {
     if (accepted[0]) { setFile(accepted[0]); setReport(null); }
@@ -77,16 +76,6 @@ function CVAnalysisTab() {
       setSuggestions(s);
     } catch { toast.error('Failed to load suggestions'); }
     finally { setLoadingSuggestions(false); }
-  };
-
-  const applyChanges = async () => {
-    if (!report) return;
-    setApplyingChanges(true);
-    try {
-      await cvService.downloadImprovedCV(report.id);
-      toast.success('Improved CV downloaded!');
-    } catch { toast.error('Failed to generate improved CV'); }
-    finally { setApplyingChanges(false); }
   };
 
   const radarData = report ? [
@@ -258,13 +247,6 @@ function CVAnalysisTab() {
                     </li>
                   ))}
                 </ul>
-                <button onClick={applyChanges} disabled={applyingChanges}
-                  className="w-full py-3.5 rounded-xl text-white font-semibold text-[15px] flex items-center justify-center gap-2 disabled:opacity-60"
-                  style={{ background: 'linear-gradient(135deg,#4F46E5,#7C3AED)' }}>
-                  {applyingChanges
-                    ? <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Generating improved CV...</>
-                    : <><ArrowRight size={18} /> Apply Changes &amp; Download New CV</>}
-                </button>
               </div>
             )}
           </div>
