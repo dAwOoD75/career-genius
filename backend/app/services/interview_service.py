@@ -96,7 +96,7 @@ Return ONLY valid JSON (no markdown, no extra text):
   "attempt_style_feedback": "Specific observation about how they structured answers — were they direct, thorough, vague, rushed?",
   "overall_score": <integer 0-100>,
   "summary": "2-3 sentence honest overall assessment. Be direct about strengths and clear weaknesses."
-}}
+}}"""
 
     try:
         response = await call_openai(
