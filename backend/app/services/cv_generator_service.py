@@ -167,13 +167,6 @@ def _generate_pdf(data: dict, ats_score: int, skills_count: int, verbs_count: in
             cell_ln(W, 5, edu.get("institution", ""))
             ln1(2)
 
-    # ── ATS Score (inside PDF — same as original model) ───────────────────────
-    ln1(5)
-    pdf.set_font("Arial", style="B", size=11)
-    cell_ln(W, 6, f"AI System Optimization Score: {ats_score}/100")
-    pdf.set_font("Arial", style="I", size=9)
-    cell_ln(W, 5, f"(Detected Optimized Keywords: {skills_count} Skills, {verbs_count} Action Verbs)")
-
     buffer = BytesIO()
     pdf.output(buffer)
     return buffer.getvalue()
