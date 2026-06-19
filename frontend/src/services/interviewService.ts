@@ -1,5 +1,5 @@
 import api from './api';
-import { ChatSession, ChatMessage } from '@/types';
+import { ChatSession, SendMessageResponse } from '@/types';
 
 export const interviewService = {
   async createSession(data: {
@@ -12,8 +12,8 @@ export const interviewService = {
     return res.data;
   },
 
-  async sendMessage(sessionId: number, content: string): Promise<ChatMessage> {
-    const res = await api.post<ChatMessage>(`/interview/sessions/${sessionId}/message`, { content }, { timeout: 90000 });
+  async sendMessage(sessionId: number, content: string): Promise<SendMessageResponse> {
+    const res = await api.post<SendMessageResponse>(`/interview/sessions/${sessionId}/message`, { content }, { timeout: 90000 });
     return res.data;
   },
 

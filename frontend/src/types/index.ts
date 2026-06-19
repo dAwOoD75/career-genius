@@ -168,8 +168,16 @@ export interface ChatMessage {
   content: string;
   feedback?: string;
   score?: number;
+  grammar_score?: number;
   question_type?: string;
   created_at: string;
+}
+
+export interface SendMessageResponse {
+  answer_score: number;
+  answer_feedback: string;
+  answer_grammar_score: number;
+  next_message: ChatMessage;
 }
 
 export interface ChatSession {

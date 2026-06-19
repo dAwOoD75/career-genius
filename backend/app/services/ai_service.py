@@ -1,3 +1,4 @@
+import asyncio
 import google.generativeai as genai
 from app.config import settings
 from app.utils.logger import app_logger
@@ -47,8 +48,14 @@ async def call_openai(
     """Gemini drop-in replacement for the old call_openai function."""
     try:
         gemini_model = _make_model(system_prompt, temperature, max_tokens)
-        response = await gemini_model.generate_content_async(user_message)
+        response = await asyncio.wait_for(
+            gemini_model.generate_content_async(user_message),
+            timeout=30.0,
+        )
         return response.text or ""
+    except asyncio.TimeoutError:
+        app_logger.error("Gemini API call timed out after 30s")
+        raise RuntimeError("AI service timed out")
     except Exception as e:
         app_logger.error(f"Gemini API error: {e}")
         raise RuntimeError(f"AI service temporarily unavailable: {str(e)}")
@@ -75,8 +82,14 @@ async def call_openai_with_history(
         last_message = messages[-1]["content"] if messages else ""
 
         chat = gemini_model.start_chat(history=history)
-        response = await chat.send_message_async(last_message)
+        response = await asyncio.wait_for(
+            chat.send_message_async(last_message),
+            timeout=30.0,
+        )
         return response.text or ""
+    except asyncio.TimeoutError:
+        app_logger.error("Gemini API call timed out after 30s")
+        raise RuntimeError("AI service timed out")
     except Exception as e:
         app_logger.error(f"Gemini API error: {e}")
         raise RuntimeError(f"AI service temporarily unavailable: {str(e)}")

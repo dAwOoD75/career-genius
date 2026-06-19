@@ -282,6 +282,7 @@ function MockInterviewTab() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [isEnding, setIsEnding] = useState(false);
   const [ended, setEnded] = useState(false);
   const [feedback, setFeedback] = useState<any>(null);
   const [role, setRole] = useState('');
@@ -299,20 +300,38 @@ function MockInterviewTab() {
   };
 
   const send = async () => {
-    if (!input.trim() || !session || sending || isComplete) return;
+    if (!input.trim() || !session || sending || isComplete || isEnding) return;
     const txt = input.trim(); setInput('');
-    const optimistic: ChatMessage = { id: Date.now(), session_id: session.id, role: 'user', content: txt, created_at: new Date().toISOString() };
+    const optimisticId = Date.now();
+    const optimistic: ChatMessage = { id: optimisticId, session_id: session.id, role: 'user', content: txt, created_at: new Date().toISOString() };
     setMessages(p => [...p, optimistic]);
     setSending(true);
     try {
       const r = await interviewService.sendMessage(session.id, txt);
-      setMessages(p => [...p, r]);
-      // Auto-end after 10th answer
-      if (answeredCount + 1 >= TOTAL_Q) {
-        const res = await interviewService.endSession(session.id);
-        setFeedback(res.feedback); setEnded(true);
+      // Update optimistic message with score
+      setMessages(prev => prev.map((m): ChatMessage =>
+        m.id === optimisticId
+          ? { ...m, score: r.answer_score, feedback: r.answer_feedback, grammar_score: r.answer_grammar_score }
+          : m
+      ));
+      // Add next question or closing message
+      if (r.next_message) {
+        setMessages(prev => [...prev, r.next_message]);
       }
-    } catch { toast.error('Failed to send'); } finally { setSending(false); }
+      setSending(false);
+      // Backend signals end via question_type === 'closing'
+      if (r.next_message?.question_type === 'closing') {
+        setIsEnding(true);
+        try {
+          const res = await interviewService.endSession(session.id);
+          setFeedback(res.feedback); setEnded(true);
+        } catch { toast.error('Could not generate report.'); } finally { setIsEnding(false); }
+      }
+    } catch {
+      toast.error('Failed to send');
+      setMessages(prev => prev.filter(m => m.id !== optimisticId));
+      setSending(false);
+    }
   };
 
   if (ended && feedback) return (

@@ -29,6 +29,7 @@ export default function InterviewChatPage() {
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [isEnding, setIsEnding] = useState(false);
   const [ended, setEnded] = useState(false);
   const [feedback, setFeedback] = useState<any>(null);
   const [role, setRole] = useState('');
@@ -37,7 +38,7 @@ export default function InterviewChatPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isSending, isEnding]);
 
   const answeredCount = messages.filter(m => m.role === 'user').length;
   const isComplete = answeredCount >= TOTAL_Q;
@@ -54,18 +55,20 @@ export default function InterviewChatPage() {
       setSession(s);
       setMessages(s.messages || []);
     } catch {
-      toast.error('Failed to start interview');
+      toast.error('Failed to start interview. Is the backend running?');
     } finally {
       setIsStarting(false);
     }
   };
 
   const send = async () => {
-    if (!input.trim() || !session || isSending || isComplete) return;
+    if (!input.trim() || !session || isSending || isComplete || isEnding) return;
     const txt = input.trim();
     setInput('');
+
+    const optimisticId = Date.now();
     const optimistic: ChatMessage = {
-      id: Date.now(),
+      id: optimisticId,
       session_id: session.id,
       role: 'user',
       content: txt,
@@ -73,22 +76,47 @@ export default function InterviewChatPage() {
     };
     setMessages(p => [...p, optimistic]);
     setIsSending(true);
+
     try {
-      const aiMsg = await interviewService.sendMessage(session.id, txt);
-      setMessages(p => [...p, aiMsg]);
-      if (answeredCount + 1 >= TOTAL_Q) {
-        const res = await interviewService.endSession(session.id);
-        setFeedback(res.feedback);
-        setEnded(true);
+      const result = await interviewService.sendMessage(session.id, txt);
+
+      // Update the optimistic user message with its real-time score
+      setMessages(prev => prev.map((m): ChatMessage =>
+        m.id === optimisticId
+          ? { ...m, score: result.answer_score, feedback: result.answer_feedback, grammar_score: result.answer_grammar_score }
+          : m
+      ));
+
+      // Add the next question or closing message
+      if (result.next_message) {
+        setMessages(prev => [...prev, result.next_message]);
       }
-    } catch {
-      toast.error('Failed to send');
-    } finally {
+
+      setIsSending(false);
+
+      // Backend signals end of interview via question_type === 'closing'
+      if (result.next_message?.question_type === 'closing') {
+        setIsEnding(true);
+        try {
+          const res = await interviewService.endSession(session.id);
+          setFeedback(res.feedback);
+          setEnded(true);
+        } catch {
+          toast.error('Could not generate your report. Please try again.');
+        } finally {
+          setIsEnding(false);
+        }
+      }
+    } catch (err) {
+      console.error('Send failed:', err);
+      toast.error('Failed to send answer. Please try again.');
+      // Roll back the optimistic message
+      setMessages(prev => prev.filter(m => m.id !== optimisticId));
       setIsSending(false);
     }
   };
 
-  // Feedback report screen
+  // ── Feedback report screen ──────────────────────────────────────────────
   if (ended && feedback) {
     return (
       <div className="p-6 max-w-3xl mx-auto space-y-5">
@@ -98,9 +126,9 @@ export default function InterviewChatPage() {
         </motion.div>
 
         <div className="card space-y-4">
-          <ScoreBar label="Technical Knowledge"   score={feedback.knowledge_score     ?? 6} color="#4F46E5" />
+          <ScoreBar label="Technical Knowledge"     score={feedback.knowledge_score     ?? 6} color="#4F46E5" />
           <ScoreBar label="Grammar & Communication" score={feedback.grammar_score       ?? 7} color="#0EA5E9" />
-          <ScoreBar label="Attempt Style"          score={feedback.attempt_style_score ?? 6} color="#7C3AED" />
+          <ScoreBar label="Attempt Style"           score={feedback.attempt_style_score ?? 6} color="#7C3AED" />
         </div>
 
         <div className="space-y-3">
@@ -132,7 +160,10 @@ export default function InterviewChatPage() {
         )}
 
         <button
-          onClick={() => { setSession(null); setMessages([]); setEnded(false); setFeedback(null); setRole(''); }}
+          onClick={() => {
+            setSession(null); setMessages([]); setEnded(false);
+            setFeedback(null); setRole(''); setIsEnding(false);
+          }}
           className="btn-primary w-full flex items-center justify-center gap-2 py-3"
         >
           <Plus size={16} /> Try Another Interview
@@ -141,7 +172,7 @@ export default function InterviewChatPage() {
     );
   }
 
-  // Setup screen
+  // ── Setup screen ────────────────────────────────────────────────────────
   if (!session) {
     return (
       <div className="p-6 max-w-3xl mx-auto space-y-6">
@@ -150,7 +181,10 @@ export default function InterviewChatPage() {
           <p className="section-subtitle">10 AI-generated questions · Scored on knowledge, grammar &amp; style</p>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card space-y-5">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+          className="card space-y-5"
+        >
           <div>
             <label className="label">Job Position</label>
             <input
@@ -174,80 +208,142 @@ export default function InterviewChatPage() {
     );
   }
 
-  // Chat screen
+  // ── Chat screen ─────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] p-4 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div>
           <h1 className="text-gray-900 font-bold text-lg">{session.job_role} · Technical Interview</h1>
-          <p className="text-gray-400 text-xs mt-0.5">Question {Math.min(answeredCount + 1, TOTAL_Q)} of {TOTAL_Q}</p>
+          <p className="text-gray-400 text-xs mt-0.5">
+            {isEnding ? 'Analyzing your performance…' : `Question ${Math.min(answeredCount + 1, TOTAL_Q)} of ${TOTAL_Q}`}
+          </p>
         </div>
         <div className="flex gap-1">
           {Array.from({ length: TOTAL_Q }).map((_, i) => (
-            <div key={i} className="w-2 h-2 rounded-full transition-all"
-              style={{ background: i < answeredCount ? '#4F46E5' : '#E5E7EB' }} />
+            <div
+              key={i}
+              className="w-2 h-2 rounded-full transition-all"
+              style={{ background: i < answeredCount ? '#4F46E5' : '#E5E7EB' }}
+            />
           ))}
         </div>
       </div>
 
       {/* Progress bar */}
       <div className="w-full bg-gray-100 rounded-full h-1 mb-4">
-        <div className="h-1 rounded-full transition-all"
-          style={{ width: `${(answeredCount / TOTAL_Q) * 100}%`, background: 'linear-gradient(to right,#4F46E5,#7C3AED)' }} />
+        <div
+          className="h-1 rounded-full transition-all"
+          style={{
+            width: `${(answeredCount / TOTAL_Q) * 100}%`,
+            background: 'linear-gradient(to right,#4F46E5,#7C3AED)',
+          }}
+        />
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-4 pb-4">
         {messages.map(msg => (
-          <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-            className={clsx('flex gap-3', msg.role === 'user' ? 'flex-row-reverse' : 'flex-row')}>
-            <div className={clsx('w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center',
-              msg.role === 'user' ? 'bg-primary-600' : 'bg-gray-100')}>
+          <motion.div
+            key={msg.id}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={clsx('flex gap-3', msg.role === 'user' ? 'flex-row-reverse' : 'flex-row')}
+          >
+            <div className={clsx(
+              'w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center',
+              msg.role === 'user' ? 'bg-primary-600' : 'bg-gray-100',
+            )}>
               {msg.role === 'user'
                 ? <User size={14} className="text-white" />
                 : <Bot size={14} className="text-primary-600" />}
             </div>
-            <div className={clsx('max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed',
-              msg.role === 'user'
-                ? 'bg-primary-600 text-white rounded-tr-sm'
-                : 'bg-white text-gray-700 rounded-tl-sm border border-gray-200 shadow-sm')}>
-              {msg.content}
+
+            <div className={clsx(
+              'flex flex-col gap-1 max-w-[75%]',
+              msg.role === 'user' ? 'items-end' : 'items-start',
+            )}>
+              <div className={clsx(
+                'px-4 py-3 rounded-2xl text-sm leading-relaxed',
+                msg.role === 'user'
+                  ? 'bg-primary-600 text-white rounded-tr-sm'
+                  : 'bg-white text-gray-700 rounded-tl-sm border border-gray-200 shadow-sm',
+              )}>
+                {msg.content}
+              </div>
+
+              {/* Per-answer score badge (user messages only) */}
+              {msg.role === 'user' && msg.score !== undefined && msg.score !== null && (
+                <div className="flex items-center gap-2">
+                  <span className={clsx(
+                    'text-xs font-bold px-2.5 py-0.5 rounded-full',
+                    msg.score >= 7 ? 'bg-green-100 text-green-700' :
+                    msg.score >= 5 ? 'bg-yellow-100 text-yellow-700' :
+                    msg.score >= 3 ? 'bg-orange-100 text-orange-700' :
+                                     'bg-red-100 text-red-700',
+                  )}>
+                    {msg.score}/10
+                  </span>
+                  {msg.feedback && (
+                    <span
+                      className="text-xs text-gray-400 max-w-[220px] truncate"
+                      title={msg.feedback}
+                    >
+                      {msg.feedback}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </motion.div>
         ))}
 
-        {isSending && (
+        {/* Loading animation while waiting for AI response or final report */}
+        {(isSending || isEnding) && (
           <div className="flex gap-3">
             <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center">
               <Bot size={14} className="text-primary-600" />
             </div>
-            <div className="bg-white border border-gray-200 shadow-sm rounded-2xl rounded-tl-sm px-4 py-3 flex gap-1">
-              {[0, 1, 2].map(i => (
-                <motion.div key={i} animate={{ y: [0, -5, 0] }}
-                  transition={{ repeat: Infinity, duration: 0.8, delay: i * 0.15 }}
-                  className="w-2 h-2 bg-primary-400 rounded-full" />
-              ))}
+            <div className="bg-white border border-gray-200 shadow-sm rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-2">
+              {isEnding ? (
+                <span className="text-xs text-gray-500 italic">Analyzing your performance…</span>
+              ) : (
+                [0, 1, 2].map(i => (
+                  <motion.div
+                    key={i}
+                    animate={{ y: [0, -5, 0] }}
+                    transition={{ repeat: Infinity, duration: 0.8, delay: i * 0.15 }}
+                    className="w-2 h-2 bg-primary-400 rounded-full"
+                  />
+                ))
+              )}
             </div>
           </div>
         )}
+
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      {!isComplete && (
+      {/* Input — hidden once all questions are answered */}
+      {!isComplete && !isEnding && (
         <div className="border-t border-gray-200 pt-4">
           <div className="flex gap-3 items-end">
             <textarea
               value={input}
               onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder="Type your answer... (Enter to send, Shift+Enter for new line)"
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+              }}
+              placeholder="Type your answer… (Enter to send, Shift+Enter for new line)"
               rows={2}
               className="input-field flex-1 resize-none"
               disabled={isSending}
             />
-            <button onClick={send} disabled={!input.trim() || isSending} className="btn-primary p-3 h-fit">
+            <button
+              onClick={send}
+              disabled={!input.trim() || isSending}
+              className="btn-primary p-3 h-fit"
+            >
               <Send size={18} />
             </button>
           </div>

@@ -8,7 +8,7 @@ import os
 
 app = FastAPI(title="ATS CV Generator Module")
 
-# 1. Trained ML Model ko Load karna
+# try model load
 try:
     nlp = spacy.load(".")
 except Exception as e:

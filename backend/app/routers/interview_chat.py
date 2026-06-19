@@ -12,7 +12,7 @@ from app.schemas.chat_session import (
     ChatSessionCreate, ChatMessageCreate,
     ChatSessionResponse, ChatSessionSummaryResponse, ChatMessageResponse,
 )
-from app.services.interview_service import generate_10_questions, generate_session_feedback
+from app.services.interview_service import generate_10_questions, generate_session_feedback, score_single_answer
 
 router = APIRouter(prefix="/interview", tags=["Interview Chatbot"])
 
@@ -62,14 +62,14 @@ async def create_session(
     return session
 
 
-@router.post("/sessions/{session_id}/message", response_model=ChatMessageResponse)
+@router.post("/sessions/{session_id}/message")
 async def send_message(
     session_id: int,
     data: ChatMessageCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Submit answer — returns next question or completion message after 10."""
+    """Submit answer — scores it in real-time, then returns next question or completion message."""
     session = db.query(ChatSession).filter(
         ChatSession.id == session_id,
         ChatSession.user_id == current_user.id,
@@ -85,38 +85,60 @@ async def send_message(
     except Exception:
         questions = []
 
+    # Count answers so far to find which question is being answered (0-based index)
+    current_q_idx = db.query(ChatMessage).filter(
+        ChatMessage.session_id == session_id,
+        ChatMessage.role == "user",
+    ).count()
+
     # Save user answer
     user_msg = ChatMessage(session_id=session_id, role="user", content=data.content)
     db.add(user_msg)
     db.flush()
 
-    answered = db.query(ChatMessage).filter(
-        ChatMessage.session_id == session_id,
-        ChatMessage.role == "user",
-    ).count()
+    # Score this answer in real-time
+    current_question = questions[current_q_idx] if current_q_idx < len(questions) else "General interview question"
+    answer_result = await score_single_answer(current_question, data.content, session.job_role or "Software Engineer")
 
+    user_msg.score = answer_result.get("score", 5)
+    user_msg.feedback = answer_result.get("feedback", "")
+
+    answered = current_q_idx + 1
     session.total_questions = answered
 
     if answered >= TOTAL_QUESTIONS:
-        ai_msg = ChatMessage(
-            session_id=session_id,
-            role="assistant",
-            content="Thank you for completing all 10 questions! Generating your performance report now...",
-            question_type="closing",
-        )
+        next_content = "Thank you for completing all 10 questions! Generating your performance report now..."
+        next_qtype = "closing"
     else:
         next_q = questions[answered] if answered < len(questions) else f"Final question: What makes you a strong fit for the {session.job_role} role?"
-        ai_msg = ChatMessage(
-            session_id=session_id,
-            role="assistant",
-            content=f"Question {answered + 1}: {next_q}",
-            question_type="technical",
-        )
+        next_content = f"Question {answered + 1}: {next_q}"
+        next_qtype = "technical"
 
+    ai_msg = ChatMessage(
+        session_id=session_id,
+        role="assistant",
+        content=next_content,
+        question_type=next_qtype,
+    )
     db.add(ai_msg)
     db.commit()
     db.refresh(ai_msg)
-    return ai_msg
+
+    return {
+        "answer_score": answer_result.get("score", 5),
+        "answer_feedback": answer_result.get("feedback", ""),
+        "answer_grammar_score": answer_result.get("grammar_score", 0),
+        "next_message": {
+            "id": ai_msg.id,
+            "session_id": ai_msg.session_id,
+            "role": ai_msg.role,
+            "content": next_content,
+            "feedback": ai_msg.feedback,
+            "score": ai_msg.score,
+            "question_type": next_qtype,
+            "created_at": ai_msg.created_at.isoformat() if isinstance(ai_msg.created_at, datetime) else datetime.now(timezone.utc).isoformat(),
+        },
+    }
 
 
 @router.post("/sessions/{session_id}/end")
@@ -133,8 +155,17 @@ async def end_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    messages = [{"role": m.role, "content": m.content} for m in session.messages]
-    feedback = await generate_session_feedback(messages, session.job_role)
+    # Explicit query avoids lazy-loading issues in async context
+    all_messages = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at)
+        .all()
+    )
+    messages = [{"role": m.role, "content": m.content} for m in all_messages]
+    # Collect stored per-answer scores so the fallback report is accurate
+    answer_scores = [m.score for m in all_messages if m.role == "user" and m.score is not None]
+    feedback = await generate_session_feedback(messages, session.job_role, answer_scores=answer_scores)
 
     session.ended_at = datetime.now(timezone.utc)
     session.session_feedback = feedback.get("summary", "")
